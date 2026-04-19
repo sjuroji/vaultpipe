@@ -41,9 +41,20 @@ vaultpipe --vault-path secret/myapp --env-file .env.local -- python app.py
 
 | Flag | Description |
 |---|---|
-| `--vault-path` | Vault secret path to read from |
-| `--env-file` | Path to a `.env` file |
+| `--vault-path` | Vault secret path to read from (can be specified multiple times) |
+| `--env-file` | Path to a `.env` file (can be specified multiple times) |
 | `--no-inherit` | Do not inherit the parent process environment |
+| `--prefix` | Strip a prefix from secret keys before injecting (e.g. `MYAPP_`) |
+
+## Precedence
+
+When the same key appears in multiple sources, later sources take priority:
+
+1. Parent environment (lowest)
+2. `.env` file(s), in order
+3. Vault secret(s), in order (highest)
+
+Use `--no-inherit` to ignore the parent environment entirely.
 
 ## How It Works
 
