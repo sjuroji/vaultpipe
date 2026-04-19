@@ -2,45 +2,60 @@ package runner
 
 import (
 	"os"
+	"strings"
 
+	"github.com/your-org/vaultpipe/internal/envfile"
 	"github.com/your-org/vaultpipe/internal/vault"
 )
 
-// EnvSource holds all resolved secrets and env-file variables that should be
-// injected into the subprocess.
-type EnvSource struct {
-	// VaultSecrets maps environment variable names to Vault secret values.
-	VaultSecrets map[string]string
-	// EnvFileVars contains variables parsed from an .env file.
-	EnvFileVars map[string]string
-	// InheritOS controls whether the current process environment is inherited.
-	InheritOS bool
+// Options controls how the subprocess environment is assembled.
+type Options struct {
+	InheritOS   bool
+	EnvFilePath string
+	VaultSecrets map[string]string // key -> vault path
+	VaultClient  *vault.Client
 }
 
-// Build constructs the final []string environment slice for exec.
-// Precedence (highest to lowest): VaultSecrets > EnvFileVars > OS environment.
-func Build(src EnvSource) []string {
-	base := make(map[string]string)
+// Build assembles the final environment slice for the subprocess.
+// Priority (highest to lowest): Vault secrets > env file > OS environment.
+func Build(opts Options) ([]string, error) {
+	env := map[string]string{}
 
-	if src.InheritOS {
+	if opts.InheritOS {
 		for _, pair := range os.Environ() {
 			k, v := splitPair(pair)
-			base[k] = v
+			env[k] = v
 		}
 	}
 
-	vault.MergeIntoEnv(base, src.EnvFileVars)
-	vault.MergeIntoEnv(base, src.VaultSecrets)
+	if opts.EnvFilePath != "" {
+		parsed, err := envfile.Parse(opts.EnvFilePath)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range parsed {
+			env[k] = v
+		}
+	}
 
-	return vault.ToSlice(base)
+	if opts.VaultClient != nil {
+		for envKey, secretPath := range opts.VaultSecrets {
+			secrets, err := opts.VaultClient.ReadSecret(secretPath)
+			if err != nil {
+				return nil, err
+			}
+			vault.MergeIntoEnv(env, secrets)
+			_ = envKey // path-level merge; envKey reserved for future field mapping
+		}
+	}
+
+	return vault.ToSlice(env), nil
 }
 
-// splitPair splits a "KEY=VALUE" string into its components.
 func splitPair(pair string) (string, string) {
-	for i := 0; i < len(pair); i++ {
-		if pair[i] == '=' {
-			return pair[:i], pair[i+1:]
-		}
+	parts := strings.SplitN(pair, "=", 2)
+	if len(parts) != 2 {
+		return parts[0], ""
 	}
-	return pair, ""
+	return parts[0], parts[1]
 }
