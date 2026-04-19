@@ -2,27 +2,28 @@ package vault
 
 import "strings"
 
-// FilterByPrefix returns a new map containing only entries whose keys
-// start with the given prefix. The prefix is stripped from the keys
-// in the returned map.
-func FilterByPrefix(env map[string]string, prefix string) map[string]string {
-	out := make(map[string]string)
-	for k, v := range env {
+// FilterByPrefix returns a new map containing only keys that start with the given prefix.
+func FilterByPrefix(secrets map[string]string, prefix string) map[string]string {
+	if prefix == "" {
+		return secrets
+	}
+	filtered := make(map[string]string)
+	for k, v := range secrets {
 		if strings.HasPrefix(k, prefix) {
-			newKey := strings.TrimPrefix(k, prefix)
-			if newKey != "" {
-				out[newKey] = v
-			}
+			filtered[k] = v
 		}
 	}
-	return out
+	return filtered
 }
 
 // AddPrefix returns a new map with the given prefix prepended to every key.
-func AddPrefix(env map[string]string, prefix string) map[string]string {
-	out := make(map[string]string, len(env))
-	for k, v := range env {
-		out[prefix+k] = v
+func AddPrefix(secrets map[string]string, prefix string) map[string]string {
+	if prefix == "" {
+		return secrets
 	}
-	return out
+	prefixed := make(map[string]string, len(secrets))
+	for k, v := range secrets {
+		prefixed[prefix+k] = v
+	}
+	return prefixed
 }
