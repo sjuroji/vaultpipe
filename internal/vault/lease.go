@@ -43,3 +43,14 @@ func ParseLease(data map[string]interface{}) (*LeaseInfo, error) {
 func (l *LeaseInfo) IsExpiringSoon(threshold time.Duration) bool {
 	return l.LeaseDuration <= threshold
 }
+
+// RemainingRatio returns the fraction of the lease duration remaining relative
+// to the given total duration. This is useful for determining when to renew,
+// for example triggering renewal when the ratio drops below 0.5 (half-life).
+// Returns 0 if total is zero to avoid division by zero.
+func (l *LeaseInfo) RemainingRatio(total time.Duration) float64 {
+	if total <= 0 {
+		return 0
+	}
+	return float64(l.LeaseDuration) / float64(total)
+}
