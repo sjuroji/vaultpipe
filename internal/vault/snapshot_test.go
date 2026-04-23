@@ -48,6 +48,24 @@ func TestTakeSnapshot_NonOKStatus(t *testing.T) {
 	}
 }
 
+func TestTakeSnapshot_EmptyResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// write no body to simulate an empty snapshot
+	}))
+	defer ts.Close()
+
+	c := &Client{Address: ts.URL, Token: "test-token", HTTP: ts.Client()}
+	var buf bytes.Buffer
+	n, err := TakeSnapshot(c, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 bytes for empty response, got %d", n)
+	}
+}
+
 func TestSnapshotStatus_OK(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	meta := SnapshotMeta{Index: 42, Term: 3, Version: 1, Timestamp: now}
