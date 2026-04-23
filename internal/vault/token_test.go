@@ -70,6 +70,20 @@ func TestLookupSelfToken_NonOKStatus(t *testing.T) {
 	}
 }
 
+func TestLookupSelfToken_InvalidJSON(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{invalid json`))
+	}))
+	defer ts.Close()
+
+	client := &Client{Address: ts.URL, Token: "tok", HTTP: ts.Client()}
+	_, err := LookupSelfToken(client)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response")
+	}
+}
+
 func TestTokenInfo_IsExpired(t *testing.T) {
 	expired := &TokenInfo{TTL: 0}
 	if !expired.IsExpired() {
