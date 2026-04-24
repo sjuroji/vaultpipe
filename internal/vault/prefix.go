@@ -27,3 +27,16 @@ func AddPrefix(secrets map[string]string, prefix string) map[string]string {
 	}
 	return prefixed
 }
+
+// StripPrefix returns a new map with the given prefix removed from every key
+// that starts with it. Keys that do not start with the prefix are left unchanged.
+func StripPrefix(secrets map[string]string, prefix string) map[string]string {
+	if prefix == "" {
+		return secrets
+	}
+	stripped := make(map[string]string, len(secrets))
+	for k, v := range secrets {
+		stripped[strings.TrimPrefix(k, prefix)] = v
+	}
+	return stripped
+}
