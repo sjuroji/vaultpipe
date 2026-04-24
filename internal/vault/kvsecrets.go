@@ -65,3 +65,36 @@ func DeleteKV(client *Client, mount, path string) error {
 
 	return nil
 }
+
+// ReadKV retrieves the latest version of a secret at the given KV v2 path.
+// It returns the secret's data as a map of key-value string pairs.
+func ReadKV(client *Client, mount, path string) (map[string]string, error) {
+	url := fmt.Sprintf("%s/v1/%s/data/%s", client.Address, mount, path)
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("building GET request: %w", err)
+	}
+	req.Header.Set("X-Vault-Token", client.Token)
+
+	resp, err := client.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing GET request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("vault returned status %d for GET %s/%s", resp.StatusCode, mount, path)
+	}
+
+	var body struct {
+		Data struct {
+			Data map[string]string `json:"data"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("decoding GET response: %w", err)
+	}
+
+	return body.Data.Data, nil
+}
