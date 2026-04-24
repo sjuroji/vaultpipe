@@ -17,6 +17,11 @@ func approleResponse(token string) map[string]interface{} {
 	}
 }
 
+// newTestClient creates a Client pointed at the given test server URL.
+func newTestClient(ts *httptest.Server) *Client {
+	return &Client{BaseURL: ts.URL, HTTP: ts.Client()}
+}
+
 func TestAppRoleLogin_OK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/auth/approle/login" {
@@ -27,7 +32,7 @@ func TestAppRoleLogin_OK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := &Client{BaseURL: ts.URL, HTTP: ts.Client()}
+	c := newTestClient(ts)
 	tok, err := AppRoleLogin(c, "my-role-id", "my-secret-id")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -43,7 +48,7 @@ func TestAppRoleLogin_NonOKStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := &Client{BaseURL: ts.URL, HTTP: ts.Client()}
+	c := newTestClient(ts)
 	_, err := AppRoleLogin(c, "bad-role", "bad-secret")
 	if err == nil {
 		t.Fatal("expected error for non-200 status")
@@ -57,7 +62,7 @@ func TestAppRoleLogin_EmptyToken(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := &Client{BaseURL: ts.URL, HTTP: ts.Client()}
+	c := newTestClient(ts)
 	_, err := AppRoleLogin(c, "role", "secret")
 	if err == nil {
 		t.Fatal("expected error for empty token")
