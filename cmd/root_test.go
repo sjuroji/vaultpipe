@@ -47,6 +47,20 @@ func TestFlags_Defaults(t *testing.T) {
 	}
 }
 
+// TestExecute_UnknownFlag verifies that passing an unrecognised flag returns
+// an error rather than silently succeeding.
+func TestExecute_UnknownFlag(t *testing.T) {
+	buf := &bytes.Buffer{}
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"--unknown-flag"})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unknown flag, got nil")
+	}
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
