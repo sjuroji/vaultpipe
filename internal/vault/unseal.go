@@ -54,3 +54,10 @@ func SubmitUnsealKey(c *Client, key string, reset bool) (*UnsealResponse, error)
 	}
 	return &result, nil
 }
+
+// ResetUnseal cancels any in-progress unseal attempt, resetting the key
+// shard counter back to zero. It is a convenience wrapper around
+// SubmitUnsealKey with Reset set to true and an empty key.
+func ResetUnseal(c *Client) (*UnsealResponse, error) {
+	return SubmitUnsealKey(c, "", true)
+}
