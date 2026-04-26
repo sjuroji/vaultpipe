@@ -1,12 +1,19 @@
 package vault
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 )
 
-// RADIUSLoginResponse represents the response from a RADIUS authentication request.
+// RADIUSLoginRequest holds credentials for RADIUS authentication.
+type RADIUSLoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// RADIUSLoginResponse holds the Vault response from a RADIUS login.
 type RADIUSLoginResponse struct {
 	Auth struct {
 		ClientToken string `json:"client_token"`
@@ -14,30 +21,35 @@ type RADIUSLoginResponse struct {
 }
 
 // RADIUSLogin authenticates against Vault using the RADIUS auth method.
-// mount specifies the mount path (defaults to "radius" if empty).
-// username and password are the RADIUS credentials.
-// Returns the client token on success.
+// mount defaults to "radius" if empty.
 func RADIUSLogin(c *Client, username, password, mount string) (string, error) {
 	if mount == "" {
 		mount = "radius"
 	}
 
-	if username == "" {
-		return "", fmt.Errorf("radius login: username is required")
-	}
-	if password == "" {
-		return "", fmt.Errorf("radius login: password is required")
+	payload := RADIUSLoginRequest{
+		Username: username,
+		Password: password,
 	}
 
-	path := fmt.Sprintf("/v1/auth/%s/login/%s", mount, username)
-
-	body := map[string]string{
-		"password": password,
-	}
-
-	resp, err := c.PostJSON(path, body)
+	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("radius login: request failed: %w", err)
+		return "", fmt.Errorf("radius login: marshal request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/v1/auth/%s/login/%s", c.Address, mount, username)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("radius login: create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.Token != "" {
+		req.Header.Set("X-Vault-Token", c.Token)
+	}
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("radius login: do request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -47,11 +59,11 @@ func RADIUSLogin(c *Client, username, password, mount string) (string, error) {
 
 	var result RADIUSLoginResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("radius login: failed to decode response: %w", err)
+		return "", fmt.Errorf("radius login: decode response: %w", err)
 	}
 
 	if result.Auth.ClientToken == "" {
-		return "", fmt.Errorf("radius login: empty token in response")
+		return "", fmt.Errorf("radius login: empty client token in response")
 	}
 
 	return result.Auth.ClientToken, nil
