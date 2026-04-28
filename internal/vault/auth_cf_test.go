@@ -20,46 +20,38 @@ func TestCFLogin_OK(t *testing.T) {
 		if r.URL.Path != "/v1/auth/cf/login" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(cfResponse("cf-token-abc"))
 	}))
 	defer ts.Close()
 
-	c := newTestClient(t, ts.URL)
-	token, err := CFLogin(c, CFLoginRequest{
-		RoleID:         "my-role",
-		SigningTime:    "2024-01-01T00:00:00Z",
-		CFInstanceCert: "cert-data",
-		Signature:      "sig-data",
-	})
+	c := newTestClient(ts.URL)
+	tok, err := CFLogin(c, "", "my-role", "2024-01-01T00:00:00Z", "cert-data", "sig-data")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if token != "cf-token-abc" {
-		t.Errorf("expected cf-token-abc, got %s", token)
+	if tok != "cf-token-abc" {
+		t.Errorf("expected cf-token-abc, got %s", tok)
 	}
 }
 
 func TestCFLogin_CustomMount(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/cloudfoundry/login" {
+		if r.URL.Path != "/v1/auth/pcf/login" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(cfResponse("cf-token-xyz"))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(cfResponse("pcf-token-xyz"))
 	}))
 	defer ts.Close()
 
-	c := newTestClient(t, ts.URL)
-	token, err := CFLogin(c, CFLoginRequest{
-		RoleID: "my-role",
-		Mount:  "cloudfoundry",
-	})
+	c := newTestClient(ts.URL)
+	tok, err := CFLogin(c, "pcf", "role", "time", "cert", "sig")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if token != "cf-token-xyz" {
-		t.Errorf("expected cf-token-xyz, got %s", token)
+	if tok != "pcf-token-xyz" {
+		t.Errorf("expected pcf-token-xyz, got %s", tok)
 	}
 }
 
@@ -69,23 +61,23 @@ func TestCFLogin_NonOKStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := newTestClient(t, ts.URL)
-	_, err := CFLogin(c, CFLoginRequest{RoleID: "bad-role"})
+	c := newTestClient(ts.URL)
+	_, err := CFLogin(c, "", "role", "time", "cert", "sig")
 	if err == nil {
-		t.Fatal("expected error, got nil")
+		t.Fatal("expected error for non-OK status")
 	}
 }
 
 func TestCFLogin_EmptyToken(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(cfResponse(""))
 	}))
 	defer ts.Close()
 
-	c := newTestClient(t, ts.URL)
-	_, err := CFLogin(c, CFLoginRequest{RoleID: "my-role"})
+	c := newTestClient(ts.URL)
+	_, err := CFLogin(c, "", "role", "time", "cert", "sig")
 	if err == nil {
-		t.Fatal("expected error for empty token, got nil")
+		t.Fatal("expected error for empty token")
 	}
 }

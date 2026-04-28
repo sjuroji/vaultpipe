@@ -1,47 +1,49 @@
 package vault
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 )
 
-// CFLoginRequest holds the parameters for Cloud Foundry authentication.
+// CFLoginRequest holds credentials for Cloud Foundry authentication.
 type CFLoginRequest struct {
 	RoleID      string `json:"role"`
 	SigningTime string `json:"signing_time"`
 	CFInstanceCert string `json:"cf_instance_cert"`
 	Signature   string `json:"signature"`
-	Mount       string `json:"-"`
 }
 
-// CFLoginResponse holds the Vault response for a CF login.
-type CFLoginResponse struct {
-	Auth struct {
-		ClientToken string `json:"client_token"`
-	} `json:"auth"`
-}
-
-// CFLogin authenticates with Vault using the Cloud Foundry auth method.
-func CFLogin(c *Client, req CFLoginRequest) (string, error) {
-	mount := req.Mount
+// CFLogin authenticates using the Cloud Foundry auth method.
+// mount defaults to "cf" if empty.
+func CFLogin(c *Client, mount, role, signingTime, cert, signature string) (string, error) {
 	if mount == "" {
 		mount = "cf"
 	}
 
-	body, err := jsonMarshal(map[string]string{
-		"role":             req.RoleID,
-		"signing_time":     req.SigningTime,
-		"cf_instance_cert": req.CFInstanceCert,
-		"signature":        req.Signature,
-	})
-	if err != nil {
-		return "", fmt.Errorf("cf login: marshal request: %w", err)
+	payload := CFLoginRequest{
+		RoleID:         role,
+		SigningTime:    signingTime,
+		CFInstanceCert: cert,
+		Signature:      signature,
 	}
 
-	resp, err := c.Post(fmt.Sprintf("/v1/auth/%s/login", mount), body)
+	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("cf login: %w", err)
+		return "", fmt.Errorf("cf login: marshal: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/v1/auth/%s/login", c.Address, mount)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("cf login: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("cf login: request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -49,9 +51,13 @@ func CFLogin(c *Client, req CFLoginRequest) (string, error) {
 		return "", fmt.Errorf("cf login: unexpected status %d", resp.StatusCode)
 	}
 
-	var result CFLoginResponse
+	var result struct {
+		Auth struct {
+			ClientToken string `json:"client_token"`
+		} `json:"auth"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("cf login: decode response: %w", err)
+		return "", fmt.Errorf("cf login: decode: %w", err)
 	}
 
 	if result.Auth.ClientToken == "" {
