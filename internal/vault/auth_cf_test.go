@@ -1,10 +1,12 @@
-package vault
+package vault_test
 
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/yourusername/vaultpipe/internal/vault"
 )
 
 func cfResponse(token string) map[string]interface{} {
@@ -20,13 +22,13 @@ func TestCFLogin_OK(t *testing.T) {
 		if r.URL.Path != "/v1/auth/cf/login" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(cfResponse("cf-token-abc"))
 	}))
 	defer ts.Close()
 
 	c := newTestClient(ts.URL)
-	tok, err := CFLogin(c, "", "my-role", "2024-01-01T00:00:00Z", "cert-data", "sig-data")
+	tok, err := vault.CFLogin(c, "my-role", "cert-contents", "key-contents", "2024-01-01T00:00:00Z", "sig", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,21 +39,21 @@ func TestCFLogin_OK(t *testing.T) {
 
 func TestCFLogin_CustomMount(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/auth/pcf/login" {
+		if r.URL.Path != "/v1/auth/cloudfoundry/login" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cfResponse("pcf-token-xyz"))
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(cfResponse("cf-token-xyz"))
 	}))
 	defer ts.Close()
 
 	c := newTestClient(ts.URL)
-	tok, err := CFLogin(c, "pcf", "role", "time", "cert", "sig")
+	tok, err := vault.CFLogin(c, "my-role", "cert", "key", "time", "sig", "cloudfoundry")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if tok != "pcf-token-xyz" {
-		t.Errorf("expected pcf-token-xyz, got %s", tok)
+	if tok != "cf-token-xyz" {
+		t.Errorf("expected cf-token-xyz, got %s", tok)
 	}
 }
 
@@ -62,22 +64,22 @@ func TestCFLogin_NonOKStatus(t *testing.T) {
 	defer ts.Close()
 
 	c := newTestClient(ts.URL)
-	_, err := CFLogin(c, "", "role", "time", "cert", "sig")
+	_, err := vault.CFLogin(c, "role", "cert", "key", "time", "sig", "")
 	if err == nil {
-		t.Fatal("expected error for non-OK status")
+		t.Fatal("expected error, got nil")
 	}
 }
 
 func TestCFLogin_EmptyToken(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(cfResponse(""))
 	}))
 	defer ts.Close()
 
 	c := newTestClient(ts.URL)
-	_, err := CFLogin(c, "", "role", "time", "cert", "sig")
+	_, err := vault.CFLogin(c, "role", "cert", "key", "time", "sig", "")
 	if err == nil {
-		t.Fatal("expected error for empty token")
+		t.Fatal("expected error for empty token, got nil")
 	}
 }
